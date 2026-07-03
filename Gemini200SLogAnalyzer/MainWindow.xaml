@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:models="clr-namespace:Gemini200SLogAnalyzer.Models"
         xmlns:scottplot="clr-namespace:ScottPlot.WPF;assembly=ScottPlot.WPF"
-        Title="Gemini200S Log Analyzer"
+        Title="Gemini200S Log Analyzer v1.1.0"
         Height="860"
         Width="1280"
         MinHeight="700"
@@ -157,17 +157,63 @@
                             BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,0,8,0">
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
                             <StackPanel>
-                                <TextBlock Text="描画スタイル" FontWeight="SemiBold" Margin="0,0,0,6"/>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                <TextBlock Text="グラフ種類" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                                <WrapPanel Margin="0,0,0,12">
                                     <RadioButton x:Name="ChartLineRadioButton" Content="折れ線"
-                                                 GroupName="ChartStyle" IsChecked="True" Margin="0,0,16,0"
+                                                 GroupName="ChartStyle" IsChecked="True" Margin="0,0,12,4"
                                                  Checked="ChartStyleRadioButton_Checked"/>
                                     <RadioButton x:Name="ChartDotRadioButton" Content="ドット"
-                                                 GroupName="ChartStyle"
+                                                 GroupName="ChartStyle" Margin="0,0,12,4"
                                                  Checked="ChartStyleRadioButton_Checked"/>
+                                    <RadioButton x:Name="ChartAreaRadioButton" Content="面"
+                                                 GroupName="ChartStyle" Margin="0,0,12,4"
+                                                 Checked="ChartStyleRadioButton_Checked"/>
+                                    <RadioButton x:Name="ChartBarRadioButton" Content="棒"
+                                                 GroupName="ChartStyle" Margin="0,0,12,4"
+                                                 Checked="ChartStyleRadioButton_Checked"/>
+                                    <RadioButton x:Name="ChartScatterRadioButton" Content="散布図"
+                                                 GroupName="ChartStyle" Margin="0,0,12,4"
+                                                 Checked="ChartStyleRadioButton_Checked"/>
+                                </WrapPanel>
+
+                                <StackPanel x:Name="ScatterSettingsPanel" Visibility="Collapsed" Margin="0,0,0,12">
+                                    <TextBlock Text="散布図の軸設定" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                                    <TextBlock Text="X軸"/>
+                                    <ComboBox x:Name="ScatterXAxisComboBox" Margin="0,2,0,6"
+                                              SelectionChanged="ScatterAxisComboBox_SelectionChanged"/>
+                                    <TextBlock Text="Y軸"/>
+                                    <ComboBox x:Name="ScatterYAxisComboBox" Margin="0,2,0,6"
+                                              SelectionChanged="ScatterAxisComboBox_SelectionChanged"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                        <Button Content="組み合わせ追加" Padding="8,2" Margin="0,0,6,0"
+                                                Click="AddScatterPair_Click"/>
+                                        <Button Content="Y一括追加" Padding="8,2"
+                                                Click="AddScatterPairsFromSelectedY_Click"/>
+                                    </StackPanel>
+                                    <TextBlock Text="散布図の組み合わせ" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                                    <ListBox x:Name="ScatterPairListBox" MaxHeight="120" BorderThickness="1"
+                                             BorderBrush="{StaticResource BorderBrushColor}" Margin="0,0,0,6">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate DataType="{x:Type models:ScatterPairItem}">
+                                                <CheckBox Content="{Binding DisplayName}"
+                                                          IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                          Checked="ScatterPairCheckBox_Changed"
+                                                          Unchecked="ScatterPairCheckBox_Changed"
+                                                          Margin="2"/>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                    <Button Content="組み合わせをクリア" Padding="8,2"
+                                            Click="ClearScatterPairs_Click"/>
                                 </StackPanel>
 
                                 <TextBlock Text="Lot ID" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                    <Button Content="一括選択" Padding="8,2" Margin="0,0,6,0"
+                                            Click="ChartLotSelectAll_Click"/>
+                                    <Button Content="一括解除" Padding="8,2"
+                                            Click="ChartLotDeselectAll_Click"/>
+                                </StackPanel>
                                 <ListBox x:Name="ChartLotListBox" MaxHeight="100" BorderThickness="1"
                                          BorderBrush="{StaticResource BorderBrushColor}" Margin="0,0,0,10">
                                     <ListBox.ItemTemplate>
@@ -182,6 +228,12 @@
                                 </ListBox>
 
                                 <TextBlock Text="Recipe ID" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                    <Button Content="一括選択" Padding="8,2" Margin="0,0,6,0"
+                                            Click="ChartRecipeSelectAll_Click"/>
+                                    <Button Content="一括解除" Padding="8,2"
+                                            Click="ChartRecipeDeselectAll_Click"/>
+                                </StackPanel>
                                 <ListBox x:Name="ChartRecipeListBox" MaxHeight="100" BorderThickness="1"
                                          BorderBrush="{StaticResource BorderBrushColor}" Margin="0,0,0,10">
                                     <ListBox.ItemTemplate>
@@ -209,6 +261,7 @@
                                     </ListBox.ItemTemplate>
                                 </ListBox>
 
+                                <StackPanel x:Name="TimeSeriesColumnPanel">
                                 <TextBlock Text="グラフ表示項目" FontWeight="SemiBold" Margin="0,0,0,6"/>
                                 <ListBox x:Name="ChartColumnListBox" MaxHeight="160" BorderThickness="1"
                                          BorderBrush="{StaticResource BorderBrushColor}">
@@ -222,8 +275,11 @@
                                         </DataTemplate>
                                     </ListBox.ItemTemplate>
                                 </ListBox>
-                                <Button Content="グラフ更新" Height="32" Margin="0,10,0,0"
+                                </StackPanel>
+                                <Button Content="グラフ更新" Height="32" Margin="0,10,0,6"
                                         Click="UpdateChart_Click"/>
+                                <Button Content="表示リセット" Height="32"
+                                        Click="ResetChartDisplay_Click"/>
                             </StackPanel>
                         </ScrollViewer>
                     </Border>

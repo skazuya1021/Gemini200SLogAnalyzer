@@ -3,5 +3,8 @@ namespace Gemini200SLogAnalyzer.Models;
 public enum ChartStyle
 {
     Line,
-    Dot
+    Dot,
+    Area,
+    Bar,
+    Scatter
 }

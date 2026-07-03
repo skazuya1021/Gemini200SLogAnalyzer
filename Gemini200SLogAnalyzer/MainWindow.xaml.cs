@@ -27,8 +27,10 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<ColumnSelectionItem> _chartLotItems = [];
     private readonly ObservableCollection<ColumnSelectionItem> _chartRecipeItems = [];
     private readonly ObservableCollection<ColumnSelectionItem> _chartCassetteItems = [];
+    private readonly ObservableCollection<ScatterPairItem> _scatterPairItems = [];
 
     private bool _isUpdatingDateFilters;
+    private bool _isUpdatingChartFilters;
     private bool _isUiReady;
 
     public MainWindow()
@@ -39,6 +41,8 @@ public partial class MainWindow : Window
         ChartLotListBox.ItemsSource = _chartLotItems;
         ChartRecipeListBox.ItemsSource = _chartRecipeItems;
         ChartCassetteListBox.ItemsSource = _chartCassetteItems;
+        ScatterPairListBox.ItemsSource = _scatterPairItems;
+        Title = $"Gemini200S Log Analyzer v{AppVersion.Current}";
         UpdateProgress(0, "待機中");
         _isUiReady = true;
     }
@@ -342,6 +346,8 @@ public partial class MainWindow : Window
         }
 
         PopulateChartMetadataFilters();
+        PopulateScatterAxisOptions();
+        UpdateChartPanelVisibility();
         UpdateChart();
         MainTabControl.SelectedIndex = 1;
     }
@@ -479,20 +485,250 @@ public partial class MainWindow : Window
 
     private void UpdateChart_Click(object sender, RoutedEventArgs e) => UpdateChart();
 
-    private void ChartColumnCheckBox_Changed(object sender, RoutedEventArgs e) => UpdateChart();
+    private void ChartColumnCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!_isUpdatingChartFilters && _isUiReady)
+        {
+            UpdateChart();
+        }
+    }
 
-    private void ChartFilterCheckBox_Changed(object sender, RoutedEventArgs e) => UpdateChart();
+    private void ChartFilterCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!_isUpdatingChartFilters && _isUiReady)
+        {
+            UpdateChart();
+        }
+    }
+
+    private void PopulateScatterAxisOptions()
+    {
+        var options = new List<string> { "DateTime" };
+        options.AddRange(_displayColumnNames);
+
+        ScatterXAxisComboBox.ItemsSource = options;
+        ScatterYAxisComboBox.ItemsSource = options;
+
+        if (options.Count > 0)
+        {
+            ScatterXAxisComboBox.SelectedIndex = 0;
+        }
+
+        if (options.Count > 1)
+        {
+            ScatterYAxisComboBox.SelectedIndex = 1;
+        }
+
+        _scatterPairItems.Clear();
+        if (_displayColumnNames.Count > 0)
+        {
+            _scatterPairItems.Add(new ScatterPairItem
+            {
+                XName = "DateTime",
+                YName = _displayColumnNames[0],
+                IsSelected = true
+            });
+        }
+    }
 
     private void ChartStyleRadioButton_Checked(object sender, RoutedEventArgs e)
     {
+        if (!_isUpdatingChartFilters && _isUiReady)
+        {
+            UpdateChartPanelVisibility();
+            UpdateChart();
+        }
+    }
+
+    private void UpdateChartPanelVisibility()
+    {
+        if (!_isUiReady)
+        {
+            return;
+        }
+
+        var isScatter = GetSelectedChartStyle() == ChartStyle.Scatter;
+        ScatterSettingsPanel.Visibility = isScatter ? Visibility.Visible : Visibility.Collapsed;
+        TimeSeriesColumnPanel.Visibility = isScatter ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void ScatterAxisComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_isUpdatingChartFilters && _isUiReady && GetSelectedChartStyle() == ChartStyle.Scatter)
+        {
+            UpdateChart();
+        }
+    }
+
+    private void AddScatterPair_Click(object sender, RoutedEventArgs e)
+    {
+        AddScatterPair(
+            ScatterXAxisComboBox.SelectedItem as string,
+            ScatterYAxisComboBox.SelectedItem as string);
+    }
+
+    private void AddScatterPairsFromSelectedY_Click(object sender, RoutedEventArgs e)
+    {
+        var xName = ScatterXAxisComboBox.SelectedItem as string;
+        if (string.IsNullOrWhiteSpace(xName))
+        {
+            return;
+        }
+
+        var yNames = _chartColumnItems.Where(c => c.IsSelected).Select(c => c.Name).ToList();
+        if (yNames.Count == 0)
+        {
+            yNames = _displayColumnNames.ToList();
+        }
+
+        foreach (var yName in yNames)
+        {
+            AddScatterPair(xName, yName, refresh: false);
+        }
+
+        UpdateChart();
+    }
+
+    private void AddScatterPair(string? xName, string? yName, bool refresh = true)
+    {
+        if (string.IsNullOrWhiteSpace(xName) || string.IsNullOrWhiteSpace(yName))
+        {
+            return;
+        }
+
+        if (xName.Equals(yName, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        if (_scatterPairItems.Any(p =>
+                p.XName.Equals(xName, StringComparison.OrdinalIgnoreCase) &&
+                p.YName.Equals(yName, StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        _scatterPairItems.Add(new ScatterPairItem
+        {
+            XName = xName,
+            YName = yName,
+            IsSelected = true
+        });
+
+        if (refresh && _isUiReady)
+        {
+            UpdateChart();
+        }
+    }
+
+    private void ClearScatterPairs_Click(object sender, RoutedEventArgs e)
+    {
+        _scatterPairItems.Clear();
+        UpdateChart();
+    }
+
+    private void ScatterPairCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!_isUpdatingChartFilters && _isUiReady)
+        {
+            UpdateChart();
+        }
+    }
+
+    private void ChartLotSelectAll_Click(object sender, RoutedEventArgs e) =>
+        SetChartItemSelection(_chartLotItems, true);
+
+    private void ChartLotDeselectAll_Click(object sender, RoutedEventArgs e) =>
+        SetChartItemSelection(_chartLotItems, false);
+
+    private void ChartRecipeSelectAll_Click(object sender, RoutedEventArgs e) =>
+        SetChartItemSelection(_chartRecipeItems, true);
+
+    private void ChartRecipeDeselectAll_Click(object sender, RoutedEventArgs e) =>
+        SetChartItemSelection(_chartRecipeItems, false);
+
+    private void ResetChartDisplay_Click(object sender, RoutedEventArgs e)
+    {
+        if (_analysisRows.Count == 0)
+        {
+            MessageBox.Show("先にデータを表示してください。", "確認",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        _isUpdatingChartFilters = true;
+        foreach (var item in _chartLotItems.Concat(_chartRecipeItems).Concat(_chartCassetteItems).Concat(_chartColumnItems))
+        {
+            item.IsSelected = true;
+        }
+
+        ChartLineRadioButton.IsChecked = true;
+        _scatterPairItems.Clear();
+        if (_displayColumnNames.Count > 0)
+        {
+            _scatterPairItems.Add(new ScatterPairItem
+            {
+                XName = "DateTime",
+                YName = _displayColumnNames[0],
+                IsSelected = true
+            });
+        }
+
+        if (ScatterXAxisComboBox.Items.Count > 0)
+        {
+            ScatterXAxisComboBox.SelectedIndex = 0;
+        }
+
+        if (ScatterYAxisComboBox.Items.Count > 1)
+        {
+            ScatterYAxisComboBox.SelectedIndex = 1;
+        }
+
+        _isUpdatingChartFilters = false;
+        UpdateChartPanelVisibility();
+        UpdateChart();
+    }
+
+    private void SetChartItemSelection(ObservableCollection<ColumnSelectionItem> items, bool selected)
+    {
+        _isUpdatingChartFilters = true;
+        foreach (var item in items)
+        {
+            item.IsSelected = selected;
+        }
+
+        _isUpdatingChartFilters = false;
+
         if (_isUiReady)
         {
             UpdateChart();
         }
     }
 
-    private ChartStyle GetSelectedChartStyle() =>
-        ChartDotRadioButton?.IsChecked == true ? ChartStyle.Dot : ChartStyle.Line;
+    private ChartStyle GetSelectedChartStyle()
+    {
+        if (ChartDotRadioButton?.IsChecked == true)
+        {
+            return ChartStyle.Dot;
+        }
+
+        if (ChartAreaRadioButton?.IsChecked == true)
+        {
+            return ChartStyle.Area;
+        }
+
+        if (ChartBarRadioButton?.IsChecked == true)
+        {
+            return ChartStyle.Bar;
+        }
+
+        if (ChartScatterRadioButton?.IsChecked == true)
+        {
+            return ChartStyle.Scatter;
+        }
+
+        return ChartStyle.Line;
+    }
 
     private IEnumerable<AnalysisRow> GetChartFilteredRows()
     {
@@ -528,6 +764,13 @@ public partial class MainWindow : Window
             return;
         }
 
+        var chartStyle = GetSelectedChartStyle();
+        if (chartStyle == ChartStyle.Scatter)
+        {
+            RenderScatterChart(filteredRows);
+            return;
+        }
+
         var selectedSeries = _chartColumnItems.Where(c => c.IsSelected).Select(c => c.Name).ToList();
         if (selectedSeries.Count == 0)
         {
@@ -535,8 +778,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        var chartStyle = GetSelectedChartStyle();
-        var isLineChart = chartStyle == ChartStyle.Line;
+        var seriesIndex = 0;
+        var barWidthDays = CalculateBarWidthDays(filteredRows.Count);
 
         foreach (var seriesName in selectedSeries)
         {
@@ -558,18 +801,134 @@ public partial class MainWindow : Window
             var xs = points.Select(p => p.X).ToArray();
             var ys = points.Select(p => p.Y).ToArray();
 
-            var scatter = ChartPlot.Plot.Add.Scatter(xs, ys);
-            scatter.LegendText = seriesName;
-            scatter.LineWidth = isLineChart ? 2 : 0;
-            scatter.MarkerSize = isLineChart ? 6 : 8;
+            switch (chartStyle)
+            {
+                case ChartStyle.Dot:
+                {
+                    var scatter = ChartPlot.Plot.Add.Scatter(xs, ys);
+                    scatter.LegendText = seriesName;
+                    scatter.LineWidth = 0;
+                    scatter.MarkerSize = 8;
+                    break;
+                }
+                case ChartStyle.Area:
+                {
+                    var area = ChartPlot.Plot.Add.Scatter(xs, ys);
+                    area.LegendText = seriesName;
+                    area.LineWidth = 2;
+                    area.MarkerSize = 0;
+                    area.FillY = true;
+                    area.FillYColor = area.Color.WithAlpha(0.25);
+                    break;
+                }
+                case ChartStyle.Bar:
+                {
+                    var offset = (seriesIndex - (selectedSeries.Count - 1) / 2.0) * barWidthDays;
+                    var barXs = xs.Select(x => x + offset).ToArray();
+                    var bars = ChartPlot.Plot.Add.Bars(barXs, ys);
+                    bars.LegendText = seriesName;
+                    break;
+                }
+                default:
+                {
+                    var line = ChartPlot.Plot.Add.Scatter(xs, ys);
+                    line.LegendText = seriesName;
+                    line.LineWidth = 2;
+                    line.MarkerSize = 6;
+                    break;
+                }
+            }
+
+            seriesIndex++;
         }
 
         ChartPlot.Plot.Axes.DateTimeTicksBottom();
+        if (chartStyle == ChartStyle.Bar)
+        {
+            ChartPlot.Plot.Axes.Margins(bottom: 0);
+        }
+
         ChartPlot.Plot.ShowLegend();
         ChartPlot.Plot.Title("Log Analysis Chart");
         ChartPlot.Plot.XLabel("DateTime");
         ChartPlot.Plot.YLabel("Value");
         ChartPlot.Refresh();
+    }
+
+    private void RenderScatterChart(IReadOnlyList<AnalysisRow> filteredRows)
+    {
+        var pairs = _scatterPairItems.Where(p => p.IsSelected).ToList();
+        if (pairs.Count == 0)
+        {
+            ChartPlot.Refresh();
+            return;
+        }
+
+        var useDateTimeAxis = false;
+
+        foreach (var pair in pairs)
+        {
+            var points = filteredRows
+                .Select(row => (
+                    X: GetAxisValue(row, pair.XName),
+                    Y: GetAxisValue(row, pair.YName)))
+                .Where(p => p.X.HasValue && p.Y.HasValue)
+                .ToList();
+
+            if (points.Count == 0)
+            {
+                continue;
+            }
+
+            var xs = points.Select(p => p.X!.Value).ToArray();
+            var ys = points.Select(p => p.Y!.Value).ToArray();
+
+            var scatter = ChartPlot.Plot.Add.Scatter(xs, ys);
+            scatter.LegendText = pair.DisplayName;
+            scatter.LineWidth = 0;
+            scatter.MarkerSize = 8;
+
+            if (pair.XName.Equals("DateTime", StringComparison.OrdinalIgnoreCase))
+            {
+                useDateTimeAxis = true;
+            }
+        }
+
+        if (useDateTimeAxis)
+        {
+            ChartPlot.Plot.Axes.DateTimeTicksBottom();
+        }
+
+        ChartPlot.Plot.ShowLegend();
+        ChartPlot.Plot.Title("Scatter Plot");
+        ChartPlot.Plot.XLabel(pairs.Count == 1 ? pairs[0].XName : "X");
+        ChartPlot.Plot.YLabel(pairs.Count == 1 ? pairs[0].YName : "Y");
+        ChartPlot.Refresh();
+    }
+
+    private static double? GetAxisValue(AnalysisRow row, string axisName)
+    {
+        if (axisName.Equals("DateTime", StringComparison.OrdinalIgnoreCase))
+        {
+            return row.DateTime.ToOADate();
+        }
+
+        if (row.Values.TryGetValue(axisName, out var value) && value.HasValue)
+        {
+            return value.Value;
+        }
+
+        return null;
+    }
+
+    private static double CalculateBarWidthDays(int rowCount)
+    {
+        if (rowCount <= 1)
+        {
+            return 0.2;
+        }
+
+        return Math.Clamp(0.8 / rowCount, 0.05, 0.25);
     }
 
     private void SaveChartPng_Click(object sender, RoutedEventArgs e)
