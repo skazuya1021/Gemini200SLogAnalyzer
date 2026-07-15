@@ -17,6 +17,7 @@ dotnet run --project Gemini200SLogAnalyzer
 ## 主な機能
 
 - ログファイルの読込み（複数ファイル / フォルダ一括）
+- **ManualLog（.csv）** の読込み・合体（Wafer Log と切替可能）
 - 日付順でのログ合体と CSV 出力
 - 統計値分析（Median / Average / Max / Min）と Excel 保存
 - グラフ表示（折れ線 / ドット / 面 / 棒 / 散布図）
@@ -25,7 +26,7 @@ dotnet run --project Gemini200SLogAnalyzer
 
 ## バージョン
 
-現在のバージョン: **1.1.0**
+現在のバージョン: **1.2.0**
 
 詳細は [CHANGELOG.md](CHANGELOG.md) を参照してください。
 

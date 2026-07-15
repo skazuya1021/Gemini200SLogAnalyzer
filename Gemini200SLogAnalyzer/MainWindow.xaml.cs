@@ -15,9 +15,11 @@ public partial class MainWindow : Window
 {
     private readonly SettingsService _settingsService = new();
     private readonly LogMergeService _mergeService = new();
+    private readonly ManualLogMergeService _manualLogMergeService = new();
     private readonly DataAnalysisService _analysisService = new();
 
     private MergedLogData? _mergedData;
+    private LogDataSourceType _dataSourceType = LogDataSourceType.WaferLog;
     private List<string> _selectedFilePaths = [];
     private IReadOnlyList<AnalysisRow> _analysisRows = Array.Empty<AnalysisRow>();
     private List<string> _displayColumnNames = [];
@@ -45,16 +47,82 @@ public partial class MainWindow : Window
         Title = $"Gemini200S Log Analyzer v{AppVersion.Current}";
         UpdateProgress(0, "待機中");
         _isUiReady = true;
+        UpdateDataSourceUi();
     }
+
+    private LogDataSourceType GetSelectedDataSourceType()
+    {
+        if (DataSourceComboBox.SelectedItem is ComboBoxItem item &&
+            item.Tag is string tag &&
+            tag.Equals("ManualLog", StringComparison.OrdinalIgnoreCase))
+        {
+            return LogDataSourceType.ManualLog;
+        }
+
+        return LogDataSourceType.WaferLog;
+    }
+
+    private void DataSourceComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_isUiReady)
+        {
+            return;
+        }
+
+        _dataSourceType = GetSelectedDataSourceType();
+        _selectedFilePaths.Clear();
+        _mergedData = null;
+        RefreshSelectedFilesList();
+        UpdateDataSourceUi();
+    }
+
+    private void UpdateDataSourceUi()
+    {
+        _dataSourceType = GetSelectedDataSourceType();
+        var isManualLog = _dataSourceType == LogDataSourceType.ManualLog;
+
+        SubtitleTextBlock.Text = isManualLog
+            ? "ManualLog（.csv）の合体・分析・グラフ表示"
+            : "Gemini200S ログファイルの合体・分析・グラフ表示";
+        MergeButton.Content = isManualLog ? "ManualLogを合体" : "ログファイルを合体";
+        MergeSummaryTextBlock.Text = _mergedData is null
+            ? (isManualLog ? "ManualLogデータ未読込" : "データ未読込")
+            : MergeSummaryTextBlock.Text;
+    }
+
+    private string GetInputFolderSetting() =>
+        _dataSourceType == LogDataSourceType.ManualLog
+            ? _settingsService.Current.LastManualLogInputFolder
+            : _settingsService.Current.LastInputFolder;
+
+    private void SaveInputFolderSetting(string folder)
+    {
+        if (_dataSourceType == LogDataSourceType.ManualLog)
+        {
+            _settingsService.UpdateManualLogInputFolder(folder);
+        }
+        else
+        {
+            _settingsService.UpdateInputFolder(folder);
+        }
+    }
+
+    private static DateTime ExtractSortDate(string filePath, LogDataSourceType sourceType) =>
+        sourceType == LogDataSourceType.ManualLog
+            ? ManualLogFileParser.ExtractSortDate(filePath)
+            : LogFileParser.ExtractSortDate(filePath);
 
     private void SelectFiles_Click(object sender, RoutedEventArgs e)
     {
+        var isManualLog = _dataSourceType == LogDataSourceType.ManualLog;
         var dialog = new OpenFileDialog
         {
-            Title = "ログファイルを選択",
-            Filter = "ログファイル (*.log)|*.log|すべてのファイル (*.*)|*.*",
+            Title = isManualLog ? "ManualLogファイルを選択" : "ログファイルを選択",
+            Filter = isManualLog
+                ? "ManualLogファイル (*.csv)|*.csv|すべてのファイル (*.*)|*.*"
+                : "ログファイル (*.log)|*.log|すべてのファイル (*.*)|*.*",
             Multiselect = true,
-            InitialDirectory = _settingsService.GetInitialFolder(_settingsService.Current.LastInputFolder)
+            InitialDirectory = _settingsService.GetInitialFolder(GetInputFolderSetting())
         };
 
         if (dialog.ShowDialog() != true)
@@ -62,13 +130,24 @@ public partial class MainWindow : Window
             return;
         }
 
-        _selectedFilePaths = dialog.FileNames.OrderBy(LogFileParser.ExtractSortDate).ToList();
+        _selectedFilePaths = dialog.FileNames
+            .Where(path => !isManualLog || ManualLogFileParser.IsManualLogFile(path))
+            .OrderBy(path => ExtractSortDate(path, _dataSourceType))
+            .ToList();
+
+        if (isManualLog && _selectedFilePaths.Count == 0)
+        {
+            MessageBox.Show("ManualLog形式のCSVファイルを選択してください。", "確認",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
         if (_selectedFilePaths.Count > 0)
         {
             var folder = Path.GetDirectoryName(_selectedFilePaths[0]);
             if (!string.IsNullOrEmpty(folder))
             {
-                _settingsService.UpdateInputFolder(folder);
+                SaveInputFolderSetting(folder);
             }
         }
 
@@ -77,10 +156,13 @@ public partial class MainWindow : Window
 
     private void SelectFolder_Click(object sender, RoutedEventArgs e)
     {
+        var isManualLog = _dataSourceType == LogDataSourceType.ManualLog;
         var dialog = new OpenFolderDialog
         {
-            Title = "ログファイルが含まれるフォルダを選択",
-            InitialDirectory = _settingsService.GetInitialFolder(_settingsService.Current.LastInputFolder),
+            Title = isManualLog
+                ? "ManualLogファイルが含まれるフォルダを選択"
+                : "ログファイルが含まれるフォルダを選択",
+            InitialDirectory = _settingsService.GetInitialFolder(GetInputFolderSetting()),
             Multiselect = false
         };
 
@@ -90,11 +172,23 @@ public partial class MainWindow : Window
         }
 
         var selectedPath = dialog.FolderName;
-        _settingsService.UpdateInputFolder(selectedPath);
-        _selectedFilePaths = Directory
-            .GetFiles(selectedPath, "*.log", SearchOption.TopDirectoryOnly)
-            .OrderBy(LogFileParser.ExtractSortDate)
-            .ToList();
+        SaveInputFolderSetting(selectedPath);
+
+        if (isManualLog)
+        {
+            _selectedFilePaths = Directory
+                .GetFiles(selectedPath, "*.csv", SearchOption.AllDirectories)
+                .Where(ManualLogFileParser.IsManualLogFile)
+                .OrderBy(path => ExtractSortDate(path, _dataSourceType))
+                .ToList();
+        }
+        else
+        {
+            _selectedFilePaths = Directory
+                .GetFiles(selectedPath, "*.log", SearchOption.TopDirectoryOnly)
+                .OrderBy(path => ExtractSortDate(path, _dataSourceType))
+                .ToList();
+        }
 
         RefreshSelectedFilesList();
     }
@@ -103,16 +197,20 @@ public partial class MainWindow : Window
     {
         SelectedFilesListBox.ItemsSource = null;
         SelectedFilesListBox.ItemsSource = _selectedFilePaths.Select(Path.GetFileName).ToList();
+        var label = _dataSourceType == LogDataSourceType.ManualLog ? "ManualLogファイル" : "ログファイル";
         MergeSummaryTextBlock.Text = _selectedFilePaths.Count == 0
-            ? "ファイルが選択されていません。"
-            : $"{_selectedFilePaths.Count} 件のログファイルが選択されています。";
+            ? $"{label}が選択されていません。"
+            : $"{_selectedFilePaths.Count} 件の{label}が選択されています。";
     }
 
     private async void MergeLogs_Click(object sender, RoutedEventArgs e)
     {
         if (_selectedFilePaths.Count == 0)
         {
-            MessageBox.Show("ログファイルを選択してください。", "確認", MessageBoxButton.OK, MessageBoxImage.Information);
+            var message = _dataSourceType == LogDataSourceType.ManualLog
+                ? "ManualLogファイルを選択してください。"
+                : "ログファイルを選択してください。";
+            MessageBox.Show(message, "確認", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -125,9 +223,13 @@ public partial class MainWindow : Window
                 UpdateProgress(percent, p.message);
             });
 
-            _mergedData = await _mergeService.MergeAsync(_selectedFilePaths, progress);
+            _mergedData = _dataSourceType == LogDataSourceType.ManualLog
+                ? await _manualLogMergeService.MergeAsync(_selectedFilePaths, progress)
+                : await _mergeService.MergeAsync(_selectedFilePaths, progress);
+
+            var sourceLabel = _dataSourceType == LogDataSourceType.ManualLog ? "ManualLog" : "ログ";
             MergeSummaryTextBlock.Text =
-                $"合体完了: {_mergedData.Rows.Count:N0} 行, {_selectedFilePaths.Count} ファイル, {_mergedData.DataColumnNames.Length} データ列";
+                $"{sourceLabel}合体完了: {_mergedData.Rows.Count:N0} 行, {_selectedFilePaths.Count} ファイル, {_mergedData.DataColumnNames.Length} データ列";
             UpdateProgress(100, "合体処理が完了しました。");
             PopulateColumnSelectors();
             PopulateFilters();

@@ -1,5 +1,15 @@
 # 変更履歴
 
+## [1.2.0] - 2026-07-15
+
+### 追加
+- **ManualLog（.csv）** データの読込み・合体・分析・グラフ表示に対応
+- データ種別の切替（Wafer Log / ManualLog）
+- ManualLog のフォルダ選択時、サブフォルダを含む `.csv` を再帰的に検索
+- ManualLog のファイル名・作成日時から日付順ソート、Cassette（L04 等）の自動抽出
+- ManualLog の `Time` 列を `DateTime` に変換して既存の分析・グラフ機能と統合
+- ManualLog 用の前回フォルダ記憶（`LastManualLogInputFolder`）
+
 ## [1.1.0] - 2026-07-03
 
 ### 追加

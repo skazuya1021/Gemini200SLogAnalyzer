@@ -37,6 +37,12 @@ public sealed class SettingsService
         Save();
     }
 
+    public void UpdateManualLogInputFolder(string folder)
+    {
+        _settings.LastManualLogInputFolder = folder;
+        Save();
+    }
+
     public void UpdateOutput(string folder, string fileName)
     {
         _settings.LastOutputFolder = folder;

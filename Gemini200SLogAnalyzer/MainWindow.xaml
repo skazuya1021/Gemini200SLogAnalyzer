@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:models="clr-namespace:Gemini200SLogAnalyzer.Models"
         xmlns:scottplot="clr-namespace:ScottPlot.WPF;assembly=ScottPlot.WPF"
-        Title="Gemini200S Log Analyzer v1.1.0"
+        Title="Gemini200S Log Analyzer v1.2.0"
         Height="860"
         Width="1280"
         MinHeight="700"
@@ -22,7 +22,8 @@
                        FontSize="22"
                        FontWeight="SemiBold"
                        Foreground="#0F172A"/>
-            <TextBlock Text="Gemini200S ログファイルの合体・分析・グラフ表示"
+            <TextBlock x:Name="SubtitleTextBlock"
+                       Text="Gemini200S ログファイルの合体・分析・グラフ表示"
                        Margin="0,4,0,0"
                        Foreground="#475569"/>
         </StackPanel>
@@ -39,11 +40,19 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,12">
-                        <Button Content="ファイルを選択..." Width="150" Height="32" Margin="0,0,8,0"
-                                Click="SelectFiles_Click"/>
-                        <Button Content="フォルダを選択..." Width="150" Height="32"
-                                Click="SelectFolder_Click"/>
+                    <StackPanel Grid.Row="0" Margin="0,0,0,12">
+                        <TextBlock Text="データ種別" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                        <ComboBox x:Name="DataSourceComboBox" Width="260" HorizontalAlignment="Left"
+                                  Margin="0,0,0,8" SelectionChanged="DataSourceComboBox_SelectionChanged">
+                            <ComboBoxItem Content="Wafer Log (.log)" Tag="WaferLog" IsSelected="True"/>
+                            <ComboBoxItem Content="ManualLog (.csv)" Tag="ManualLog"/>
+                        </ComboBox>
+                        <StackPanel Orientation="Horizontal">
+                            <Button x:Name="SelectFilesButton" Content="ファイルを選択..." Width="150" Height="32" Margin="0,0,8,0"
+                                    Click="SelectFiles_Click"/>
+                            <Button x:Name="SelectFolderButton" Content="フォルダを選択..." Width="150" Height="32"
+                                    Click="SelectFolder_Click"/>
+                        </StackPanel>
                     </StackPanel>
 
                     <TextBlock Grid.Row="1" Text="選択されたファイル" FontWeight="SemiBold" Margin="0,0,0,4"/>
@@ -59,7 +68,7 @@
                     </Border>
 
                     <StackPanel Grid.Row="4" Orientation="Horizontal">
-                        <Button Content="ログファイルを合体" Width="160" Height="34" Margin="0,0,8,0"
+                        <Button x:Name="MergeButton" Content="ログファイルを合体" Width="180" Height="34" Margin="0,0,8,0"
                                 Click="MergeLogs_Click"/>
                         <Button Content="CSVとして出力..." Width="160" Height="34"
                                 Click="ExportCsv_Click"/>
