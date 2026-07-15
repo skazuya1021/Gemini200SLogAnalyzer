@@ -36,6 +36,19 @@ public static class ManualLogFileParser
 
     public static DateTime ExtractSortDate(string filePath)
     {
+        try
+        {
+            var firstLine = File.ReadLines(filePath).First();
+            if (CreatedLinePattern.IsMatch(firstLine))
+            {
+                return ExtractCreatedDate(firstLine);
+            }
+        }
+        catch
+        {
+            // fall through to filename parsing
+        }
+
         var fileName = Path.GetFileNameWithoutExtension(filePath);
         var match = FileNamePattern.Match(fileName);
         if (match.Success)
@@ -159,15 +172,49 @@ public static class ManualLogFileParser
         return string.Empty;
     }
 
-    private static string BuildDateTimeString(DateTime baseDate, string timeValue)
+    private static string BuildDateTimeString(DateTime baseDateTime, string elapsedValue)
     {
-        if (TimeSpan.TryParse(timeValue.Trim(), CultureInfo.InvariantCulture, out var time) ||
-            TimeSpan.TryParse(timeValue.Trim(), CultureInfo.CurrentCulture, out time))
+        if (!TryParseElapsedSeconds(elapsedValue, baseDateTime, out var elapsedSeconds))
         {
-            var dateTime = baseDate.Date + time;
-            return dateTime.ToString("yyyy/MM/dd HH:mm:ss", CultureInfo.InvariantCulture);
+            return elapsedValue;
         }
 
-        return timeValue;
+        var dateTime = baseDateTime.AddSeconds(elapsedSeconds);
+        return dateTime.ToString("yyyy/MM/dd HH:mm:ss", CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// A列の値を1行目日時からの経過秒として解釈する。
+    /// 数値の場合は秒、HH:mm:ss 形式の場合は1行目の時刻を基準に経過秒へ変換する。
+    /// </summary>
+    private static bool TryParseElapsedSeconds(string value, DateTime baseDateTime, out double elapsedSeconds)
+    {
+        elapsedSeconds = 0;
+        var trimmed = value.Trim();
+        if (string.IsNullOrEmpty(trimmed))
+        {
+            return false;
+        }
+
+        if (double.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out var numericSeconds) ||
+            double.TryParse(trimmed, NumberStyles.Float, CultureInfo.CurrentCulture, out numericSeconds))
+        {
+            elapsedSeconds = numericSeconds;
+            return true;
+        }
+
+        if (TimeSpan.TryParse(trimmed, CultureInfo.InvariantCulture, out var elapsedTime) ||
+            TimeSpan.TryParse(trimmed, CultureInfo.CurrentCulture, out elapsedTime))
+        {
+            elapsedSeconds = elapsedTime.TotalSeconds - baseDateTime.TimeOfDay.TotalSeconds;
+            if (elapsedSeconds < 0)
+            {
+                elapsedSeconds = elapsedTime.TotalSeconds;
+            }
+
+            return true;
+        }
+
+        return false;
     }
 }

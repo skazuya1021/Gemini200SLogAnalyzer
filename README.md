@@ -26,7 +26,7 @@ dotnet run --project Gemini200SLogAnalyzer
 
 ## バージョン
 
-現在のバージョン: **1.2.0**
+現在のバージョン: **1.2.1**
 
 詳細は [CHANGELOG.md](CHANGELOG.md) を参照してください。
 

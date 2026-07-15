@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:models="clr-namespace:Gemini200SLogAnalyzer.Models"
         xmlns:scottplot="clr-namespace:ScottPlot.WPF;assembly=ScottPlot.WPF"
-        Title="Gemini200S Log Analyzer v1.2.0"
+        Title="Gemini200S Log Analyzer v1.2.1"
         Height="860"
         Width="1280"
         MinHeight="700"
