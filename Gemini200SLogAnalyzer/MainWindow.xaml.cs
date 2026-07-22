@@ -1,5 +1,4 @@
 ﻿using System.Collections.ObjectModel;
-using System.Data;
 using System.Globalization;
 using System.Text;
 using System.Windows.Threading;
@@ -65,6 +64,8 @@ public partial class MainWindow : Window
     private bool _chartPlotHasLimits;
     private int _chartPlotLodVisibleCount;
     private int _chartPlotLodTotalInView;
+    private bool _chartUpdatePending;
+    private ScrollViewer? _analysisGridScrollViewer;
 
     public MainWindow()
     {
@@ -178,6 +179,7 @@ public partial class MainWindow : Window
 
         AnalysisDataGrid.Columns.Clear();
         AnalysisDataGrid.ItemsSource = null;
+        AnalysisGridStatusTextBlock.Text = string.Empty;
 
         ScatterXAxisComboBox.ItemsSource = null;
         ScatterYAxisComboBox.ItemsSource = null;
@@ -598,8 +600,85 @@ public partial class MainWindow : Window
         PopulateScatterAxisOptions();
         PopulateVariationSeriesOptions();
         UpdateChartPanelVisibility();
-        UpdateChart();
+        _chartUpdatePending = true;
         MainTabControl.SelectedIndex = 1;
+    }
+
+    private void MainTabControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_isUiReady || e.Source != MainTabControl)
+        {
+            return;
+        }
+
+        if (MainTabControl.SelectedIndex == 2 && _chartUpdatePending)
+        {
+            _chartUpdatePending = false;
+            UpdateChart();
+        }
+    }
+
+    private void AnalysisDataGrid_Loaded(object sender, RoutedEventArgs e)
+    {
+        _analysisGridScrollViewer = FindVisualChild<ScrollViewer>(AnalysisDataGrid);
+        if (_analysisGridScrollViewer is not null)
+        {
+            _analysisGridScrollViewer.ScrollChanged -= AnalysisDataGrid_ScrollChanged;
+            _analysisGridScrollViewer.ScrollChanged += AnalysisDataGrid_ScrollChanged;
+            UpdateAnalysisGridStatus();
+        }
+    }
+
+    private void AnalysisDataGrid_ScrollChanged(object sender, ScrollChangedEventArgs e)
+    {
+        if (e.VerticalChange != 0 || e.ViewportHeightChange != 0)
+        {
+            UpdateAnalysisGridStatus();
+        }
+    }
+
+    private void UpdateAnalysisGridStatus()
+    {
+        if (_analysisRows.Count == 0)
+        {
+            AnalysisGridStatusTextBlock.Text = string.Empty;
+            return;
+        }
+
+        if (_analysisGridScrollViewer is null)
+        {
+            AnalysisGridStatusTextBlock.Text = $"全 {_analysisRows.Count:N0} 行";
+            return;
+        }
+
+        var rowHeight = AnalysisDataGrid.RowHeight > 0 ? AnalysisDataGrid.RowHeight : 24.0;
+        var firstVisible = (int)Math.Floor(_analysisGridScrollViewer.VerticalOffset / rowHeight);
+        var visibleCount = (int)Math.Ceiling(_analysisGridScrollViewer.ViewportHeight / rowHeight) + 1;
+        var lastVisible = Math.Min(_analysisRows.Count - 1, firstVisible + visibleCount - 1);
+        firstVisible = Math.Clamp(firstVisible, 0, Math.Max(0, _analysisRows.Count - 1));
+
+        AnalysisGridStatusTextBlock.Text =
+            $"表示中: {firstVisible + 1:N0} 〜 {lastVisible + 1:N0} / 全 {_analysisRows.Count:N0} 行（スクロールに応じて表示）";
+    }
+
+    private static T? FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
+    {
+        for (var i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(parent, i);
+            if (child is T match)
+            {
+                return match;
+            }
+
+            var nested = FindVisualChild<T>(child);
+            if (nested is not null)
+            {
+                return nested;
+            }
+        }
+
+        return null;
     }
 
     private void PopulateVariationSeriesOptions()
@@ -674,47 +753,47 @@ public partial class MainWindow : Window
 
     private void BindAnalysisGrid()
     {
-        var table = new DataTable();
-        table.Columns.Add("DateTime", typeof(DateTime));
-        table.Columns.Add("Cassette", typeof(string));
-        table.Columns.Add("LotID", typeof(string));
-        table.Columns.Add("RecipeID", typeof(string));
-
-        foreach (var column in _displayColumnNames)
-        {
-            table.Columns.Add(column, typeof(double));
-        }
-
-        foreach (var row in _analysisRows)
-        {
-            var values = new object[4 + _displayColumnNames.Count];
-            values[0] = row.DateTime;
-            values[1] = row.Cassette;
-            values[2] = row.LotId;
-            values[3] = row.RecipeId;
-
-            for (var i = 0; i < _displayColumnNames.Count; i++)
-            {
-                var colName = _displayColumnNames[i];
-                values[4 + i] = row.Values.TryGetValue(colName, out var val) && val.HasValue
-                    ? val.Value
-                    : DBNull.Value;
-            }
-
-            table.Rows.Add(values);
-        }
-
         AnalysisDataGrid.Columns.Clear();
-        foreach (DataColumn dataColumn in table.Columns)
+
+        AnalysisDataGrid.Columns.Add(new DataGridTextColumn
+        {
+            Header = "DateTime",
+            Binding = new Binding(nameof(AnalysisRow.DateTime))
+            {
+                StringFormat = "yyyy/MM/dd HH:mm:ss"
+            }
+        });
+        AnalysisDataGrid.Columns.Add(new DataGridTextColumn
+        {
+            Header = "Cassette",
+            Binding = new Binding(nameof(AnalysisRow.Cassette))
+        });
+        AnalysisDataGrid.Columns.Add(new DataGridTextColumn
+        {
+            Header = "LotID",
+            Binding = new Binding(nameof(AnalysisRow.LotId))
+        });
+        AnalysisDataGrid.Columns.Add(new DataGridTextColumn
+        {
+            Header = "RecipeID",
+            Binding = new Binding(nameof(AnalysisRow.RecipeId))
+        });
+
+        foreach (var columnName in _displayColumnNames)
         {
             AnalysisDataGrid.Columns.Add(new DataGridTextColumn
             {
-                Header = dataColumn.ColumnName,
-                Binding = new Binding($"[{dataColumn.ColumnName}]")
+                Header = columnName,
+                Binding = new Binding(nameof(AnalysisRow.Values))
+                {
+                    Converter = (IValueConverter)FindResource("AnalysisValueConverter"),
+                    ConverterParameter = columnName
+                }
             });
         }
 
-        AnalysisDataGrid.ItemsSource = table.DefaultView;
+        AnalysisDataGrid.ItemsSource = _analysisRows;
+        UpdateAnalysisGridStatus();
     }
 
     private void ExportExcel_Click(object sender, RoutedEventArgs e)
@@ -1683,7 +1762,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (_diffPoint1Index is null)
+        if (DiffTargetPoint1RadioButton.IsChecked == true)
         {
             _diffPoint1Index = rowIndex;
             if (_diffMarker1 is not null)
@@ -1696,26 +1775,12 @@ public partial class MainWindow : Window
                 TryApplyAutoDiffPoint2();
             }
         }
-        else if (_diffPoint2Index is null)
+        else
         {
             _diffPoint2Index = rowIndex;
             if (_diffMarker2 is not null)
             {
                 UpdateDiffMarker(_diffMarker2, rowIndex);
-            }
-        }
-        else
-        {
-            ClearChartDiffPoints();
-            _diffPoint1Index = rowIndex;
-            if (_diffMarker1 is not null)
-            {
-                UpdateDiffMarker(_diffMarker1, rowIndex);
-            }
-
-            if (DiffAutoPoint2CheckBox.IsChecked == true)
-            {
-                TryApplyAutoDiffPoint2();
             }
         }
 

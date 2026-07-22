@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:models="clr-namespace:Gemini200SLogAnalyzer.Models"
         xmlns:scottplot="clr-namespace:ScottPlot.WPF;assembly=ScottPlot.WPF"
-        Title="Gemini200S Log Analyzer v1.3.2"
+        Title="Gemini200S Log Analyzer v1.3.3"
         Height="860"
         Width="1280"
         MinHeight="700"
@@ -28,7 +28,7 @@
                        Foreground="#475569"/>
         </StackPanel>
 
-        <TabControl Grid.Row="1" x:Name="MainTabControl">
+        <TabControl Grid.Row="1" x:Name="MainTabControl" SelectionChanged="MainTabControl_SelectionChanged">
             <!-- ファイル読込み -->
             <TabItem Header="ファイル読込み">
                 <Grid Margin="8">
@@ -139,6 +139,7 @@
                         <Grid.RowDefinitions>
                             <RowDefinition Height="*"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         <DataGrid Grid.Row="0" x:Name="AnalysisDataGrid"
                                   AutoGenerateColumns="False"
@@ -146,8 +147,17 @@
                                   CanUserAddRows="False"
                                   AlternatingRowBackground="#F8FAFC"
                                   GridLinesVisibility="Horizontal"
-                                  HeadersVisibility="Column"/>
-                        <Button Grid.Row="1" Content="Excel形式で保存..." HorizontalAlignment="Right"
+                                  HeadersVisibility="Column"
+                                  EnableRowVirtualization="True"
+                                  EnableColumnVirtualization="True"
+                                  VirtualizingPanel.IsVirtualizing="True"
+                                  VirtualizingPanel.VirtualizationMode="Recycling"
+                                  ScrollViewer.CanContentScroll="True"
+                                  RowHeight="24"
+                                  Loaded="AnalysisDataGrid_Loaded"/>
+                        <TextBlock Grid.Row="1" x:Name="AnalysisGridStatusTextBlock"
+                                   Margin="0,6,0,0" Foreground="#64748B" FontSize="11"/>
+                        <Button Grid.Row="2" Content="Excel形式で保存..." HorizontalAlignment="Right"
                                 Width="160" Height="32" Margin="0,8,0,0"
                                 Click="ExportExcel_Click"/>
                     </Grid>
@@ -325,6 +335,12 @@
                                           Checked="DiffMeasureCheckBox_Changed"
                                           Unchecked="DiffMeasureCheckBox_Changed"/>
                                 <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                    <RadioButton x:Name="DiffTargetPoint1RadioButton" Content="点1を指定"
+                                                 GroupName="DiffTarget" IsChecked="True" Margin="0,0,16,0"/>
+                                    <RadioButton x:Name="DiffTargetPoint2RadioButton" Content="点2を指定"
+                                                 GroupName="DiffTarget"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
                                     <TextBlock Text="点1から" VerticalAlignment="Center"/>
                                     <TextBox x:Name="DiffOffsetValueTextBox" Width="48" Height="24"
                                              Text="10" Margin="6,0,4,0" VerticalAlignment="Center"/>
@@ -342,10 +358,10 @@
                                           Content="点1指定後に自動で点2を設定"/>
                                 <TextBlock x:Name="ChartCursorInfoTextBlock"
                                            Text="カーソルをグラフ上に移動すると、最寄りのデータ点の値を表示します。"
-                                           TextWrapping="Wrap" FontFamily="Consolas" FontSize="11"
+                                           TextWrapping="Wrap" FontSize="11"
                                            Foreground="#334155" Margin="0,6,0,0"/>
                                 <TextBlock x:Name="ChartDiffInfoTextBlock"
-                                           TextWrapping="Wrap" FontFamily="Consolas" FontSize="11"
+                                           TextWrapping="Wrap" FontSize="11"
                                            Foreground="#B45309" Margin="0,4,0,0"/>
                             </StackPanel>
                         </Border>

@@ -40,7 +40,7 @@ public static class ChartPngExportService
                 context.DrawRectangle(Brushes.White, null, new Rect(0, 0, DefaultWidth, totalHeight));
                 context.DrawImage(chartBitmap, new Rect(0, 0, DefaultWidth, DefaultHeight));
 
-                var typeface = new Typeface(new FontFamily("Consolas"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
+                var typeface = new Typeface(new FontFamily("Yu Gothic UI"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
                 var y = DefaultHeight + Padding;
 
                 foreach (var line in lines)

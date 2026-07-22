@@ -1,10 +1,39 @@
 ﻿<Application x:Class="Gemini200SLogAnalyzer.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:converters="clr-namespace:Gemini200SLogAnalyzer.Converters"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
         <SolidColorBrush x:Key="SurfaceBrush" Color="#F1F5F9"/>
         <SolidColorBrush x:Key="BorderBrushColor" Color="#CBD5E1"/>
         <SolidColorBrush x:Key="AccentBrush" Color="#2563EB"/>
+        <converters:AnalysisValueConverter x:Key="AnalysisValueConverter"/>
+        <Style TargetType="{x:Type Window}">
+            <Setter Property="FontFamily" Value="Yu Gothic UI"/>
+        </Style>
+        <Style TargetType="{x:Type TextBlock}">
+            <Setter Property="FontFamily" Value="Yu Gothic UI"/>
+        </Style>
+        <Style TargetType="{x:Type TextBox}">
+            <Setter Property="FontFamily" Value="Yu Gothic UI"/>
+        </Style>
+        <Style TargetType="{x:Type Button}">
+            <Setter Property="FontFamily" Value="Yu Gothic UI"/>
+        </Style>
+        <Style TargetType="{x:Type CheckBox}">
+            <Setter Property="FontFamily" Value="Yu Gothic UI"/>
+        </Style>
+        <Style TargetType="{x:Type RadioButton}">
+            <Setter Property="FontFamily" Value="Yu Gothic UI"/>
+        </Style>
+        <Style TargetType="{x:Type TabItem}">
+            <Setter Property="FontFamily" Value="Yu Gothic UI"/>
+        </Style>
+        <Style TargetType="{x:Type DataGrid}">
+            <Setter Property="FontFamily" Value="Yu Gothic UI"/>
+        </Style>
+        <Style TargetType="{x:Type ComboBox}">
+            <Setter Property="FontFamily" Value="Yu Gothic UI"/>
+        </Style>
     </Application.Resources>
 </Application>
