@@ -591,9 +591,15 @@ public partial class MainWindow : Window
         BindAnalysisGrid();
 
         _chartColumnItems.Clear();
-        foreach (var name in _displayColumnNames)
+        for (var i = 0; i < _displayColumnNames.Count; i++)
         {
-            _chartColumnItems.Add(new ColumnSelectionItem { Name = name, IsSelected = true });
+            var name = _displayColumnNames[i];
+            _chartColumnItems.Add(new ColumnSelectionItem
+            {
+                Name = name,
+                IsSelected = true,
+                YAxisSide = i == 1 ? YAxisSide.Right : YAxisSide.Left
+            });
         }
 
         PopulateChartMetadataFilters();
@@ -841,6 +847,14 @@ public partial class MainWindow : Window
         }
     }
 
+    private void ChartYAxisSide_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_isUpdatingChartFilters && _isUiReady && e.AddedItems.Count > 0)
+        {
+            UpdateChart();
+        }
+    }
+
     private void ChartFilterCheckBox_Changed(object sender, RoutedEventArgs e)
     {
         if (!_isUpdatingChartFilters && _isUiReady)
@@ -1008,6 +1022,11 @@ public partial class MainWindow : Window
         foreach (var item in _chartLotItems.Concat(_chartRecipeItems).Concat(_chartCassetteItems).Concat(_chartColumnItems))
         {
             item.IsSelected = true;
+        }
+
+        for (var i = 0; i < _chartColumnItems.Count; i++)
+        {
+            _chartColumnItems[i].YAxisSide = i == 1 ? YAxisSide.Right : YAxisSide.Left;
         }
 
         ChartLineRadioButton.IsChecked = true;
@@ -1248,6 +1267,59 @@ public partial class MainWindow : Window
         }
     }
 
+    private static void AssignSeriesYAxis(
+        IPlottable plottable,
+        Plot plot,
+        YAxisSide side,
+        int selectedCount)
+    {
+        plottable.Axes.YAxis = selectedCount >= 2 && side == YAxisSide.Right
+            ? plot.Axes.Right
+            : plot.Axes.Left;
+    }
+
+    private static void ConfigureChartYAxes(Plot plot, IReadOnlyList<ColumnSelectionItem> selectedItems)
+    {
+        plot.Axes.Right.IsVisible = false;
+        plot.Grid.YAxis = plot.Axes.Left;
+
+        if (selectedItems.Count == 0)
+        {
+            plot.Axes.Left.Label.Text = "Value";
+            return;
+        }
+
+        if (selectedItems.Count == 1)
+        {
+            plot.Axes.Left.Label.Text = selectedItems[0].Name;
+            return;
+        }
+
+        var leftItems = selectedItems.Where(i => i.YAxisSide == YAxisSide.Left).ToList();
+        var rightItems = selectedItems.Where(i => i.YAxisSide == YAxisSide.Right).ToList();
+
+        if (rightItems.Count == 0)
+        {
+            plot.Axes.Left.Label.Text = FormatYAxisLabel(leftItems);
+            return;
+        }
+
+        if (leftItems.Count == 0)
+        {
+            plot.Axes.Right.IsVisible = true;
+            plot.Axes.Right.Label.Text = FormatYAxisLabel(rightItems);
+            plot.Grid.YAxis = plot.Axes.Right;
+            return;
+        }
+
+        plot.Axes.Right.IsVisible = true;
+        plot.Axes.Left.Label.Text = FormatYAxisLabel(leftItems);
+        plot.Axes.Right.Label.Text = FormatYAxisLabel(rightItems);
+    }
+
+    private static string FormatYAxisLabel(IEnumerable<ColumnSelectionItem> items) =>
+        string.Join(", ", items.Select(i => i.Name));
+
     private void UpdateChart(bool resetLimits = true)
     {
         if (!_isUiReady || ChartPlot?.Plot is null)
@@ -1312,8 +1384,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        var selectedSeries = _chartColumnItems.Where(c => c.IsSelected).Select(c => c.Name).ToList();
-        if (selectedSeries.Count == 0)
+        var selectedItems = _chartColumnItems.Where(c => c.IsSelected).ToList();
+        if (selectedItems.Count == 0)
         {
             _chartPlotHasLimits = false;
             ChartPlotStatusTextBlock.Text = string.Empty;
@@ -1322,6 +1394,8 @@ public partial class MainWindow : Window
             ChartPlot.Refresh();
             return;
         }
+
+        var selectedSeries = selectedItems.Select(c => c.Name).ToList();
 
         double xMin;
         double xMax;
@@ -1344,8 +1418,9 @@ public partial class MainWindow : Window
         var barWidthDays = CalculateBarWidthDays(
             Math.Min(_chartPlotLodTotalInView, VariationPlotLodService.DefaultMaxPoints));
 
-        foreach (var seriesName in selectedSeries)
+        foreach (var item in selectedItems)
         {
+            var seriesName = item.Name;
             var plotPoints = VariationPlotLodService.GetPlotPoints(
                 filteredRows, seriesName, xMin, xMax);
 
@@ -1368,6 +1443,7 @@ public partial class MainWindow : Window
                     scatter.LegendText = seriesName;
                     scatter.LineWidth = 0;
                     scatter.MarkerSize = markerSize > 0 ? markerSize : 8;
+                    AssignSeriesYAxis(scatter, ChartPlot.Plot, item.YAxisSide, selectedItems.Count);
                     break;
                 }
                 case ChartStyle.Area:
@@ -1378,14 +1454,16 @@ public partial class MainWindow : Window
                     area.MarkerSize = 0;
                     area.FillY = true;
                     area.FillYColor = area.Color.WithAlpha(0.25);
+                    AssignSeriesYAxis(area, ChartPlot.Plot, item.YAxisSide, selectedItems.Count);
                     break;
                 }
                 case ChartStyle.Bar:
                 {
-                    var offset = (seriesIndex - (selectedSeries.Count - 1) / 2.0) * barWidthDays;
+                    var offset = (seriesIndex - (selectedItems.Count - 1) / 2.0) * barWidthDays;
                     var barXs = xs.Select(x => x + offset).ToArray();
                     var bars = ChartPlot.Plot.Add.Bars(barXs, ys);
                     bars.LegendText = seriesName;
+                    AssignSeriesYAxis(bars, ChartPlot.Plot, item.YAxisSide, selectedItems.Count);
                     break;
                 }
                 default:
@@ -1394,6 +1472,7 @@ public partial class MainWindow : Window
                     line.LegendText = seriesName;
                     line.LineWidth = 2;
                     line.MarkerSize = markerSize;
+                    AssignSeriesYAxis(line, ChartPlot.Plot, item.YAxisSide, selectedItems.Count);
                     break;
                 }
             }
@@ -1410,7 +1489,8 @@ public partial class MainWindow : Window
         ChartPlot.Plot.ShowLegend();
         ChartPlot.Plot.Title("Log Analysis Chart");
         ChartPlot.Plot.XLabel("DateTime");
-        ChartPlot.Plot.YLabel("Value");
+        ConfigureChartYAxes(ChartPlot.Plot, selectedItems);
+        ScottPlotFontHelper.ApplyJapaneseFont(ChartPlot.Plot);
 
         _chartCursorContext = new ChartCursorContext
         {
@@ -1559,6 +1639,7 @@ public partial class MainWindow : Window
         ChartPlot.Plot.Title("Scatter Plot");
         ChartPlot.Plot.XLabel(pairs.Count == 1 ? pairs[0].XName : "X");
         ChartPlot.Plot.YLabel(pairs.Count == 1 ? pairs[0].YName : "Y");
+        ScottPlotFontHelper.ApplyJapaneseFont(ChartPlot.Plot);
 
         _chartCursorContext = new ChartCursorContext
         {
@@ -2199,6 +2280,7 @@ public partial class MainWindow : Window
         VariationPlot.Plot.XLabel("DateTime");
         VariationPlot.Plot.YLabel(_variationSeriesName);
         VariationPlot.Plot.ShowLegend();
+        ScottPlotFontHelper.ApplyJapaneseFont(VariationPlot.Plot);
 
         if (resetLimits || !_variationPlotHasLimits)
         {

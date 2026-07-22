@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:models="clr-namespace:Gemini200SLogAnalyzer.Models"
         xmlns:scottplot="clr-namespace:ScottPlot.WPF;assembly=ScottPlot.WPF"
-        Title="Gemini200S Log Analyzer v1.3.3"
+        Title="Gemini200S Log Analyzer v1.3.4"
         Height="860"
         Width="1280"
         MinHeight="700"
@@ -281,16 +281,32 @@
                                 </ListBox>
 
                                 <StackPanel x:Name="TimeSeriesColumnPanel">
-                                <TextBlock Text="グラフ表示項目" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                                <TextBlock Text="グラフ表示項目" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                                <TextBlock Text="Y軸: L=左 / R=右（2項目以上で有効）" FontSize="10"
+                                           Foreground="#64748B" Margin="0,0,0,4"/>
                                 <ListBox x:Name="ChartColumnListBox" MaxHeight="160" BorderThickness="1"
                                          BorderBrush="{StaticResource BorderBrushColor}">
                                     <ListBox.ItemTemplate>
                                         <DataTemplate DataType="{x:Type models:ColumnSelectionItem}">
-                                            <CheckBox Content="{Binding Name}"
-                                                      IsChecked="{Binding IsSelected, Mode=TwoWay}"
-                                                      Checked="ChartColumnCheckBox_Changed"
-                                                      Unchecked="ChartColumnCheckBox_Changed"
-                                                      Margin="2"/>
+                                            <Grid Margin="2">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <CheckBox Grid.Column="0"
+                                                          Content="{Binding Name}"
+                                                          IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                          Checked="ChartColumnCheckBox_Changed"
+                                                          Unchecked="ChartColumnCheckBox_Changed"
+                                                          VerticalAlignment="Center"/>
+                                                <ComboBox Grid.Column="1" Width="52" Height="22" Margin="4,0,0,0"
+                                                          SelectedIndex="{Binding YAxisSideIndex, Mode=TwoWay}"
+                                                          SelectionChanged="ChartYAxisSide_Changed"
+                                                          ToolTip="Y軸（左/右）">
+                                                    <ComboBoxItem Content="L"/>
+                                                    <ComboBoxItem Content="R"/>
+                                                </ComboBox>
+                                            </Grid>
                                         </DataTemplate>
                                     </ListBox.ItemTemplate>
                                 </ListBox>
@@ -459,7 +475,7 @@
                         </Grid.RowDefinitions>
                         <Border Grid.Row="0" Background="White" BorderBrush="{StaticResource BorderBrushColor}"
                                 BorderThickness="1" CornerRadius="6" Padding="4">
-                            <Grid>
+    <Grid>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="*"/>
                                     <RowDefinition Height="Auto"/>
