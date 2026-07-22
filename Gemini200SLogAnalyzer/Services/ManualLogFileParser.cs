@@ -34,6 +34,23 @@ public static class ManualLogFileParser
         }
     }
 
+    public static bool TryExtractSortDateFromFileName(string fileName, out DateTime result)
+    {
+        result = DateTime.MinValue;
+        var match = FileNamePattern.Match(Path.GetFileNameWithoutExtension(fileName));
+        if (!match.Success)
+        {
+            return false;
+        }
+
+        var year = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+        var month = int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
+        var day = int.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture);
+        var hour = int.Parse(match.Groups[4].Value, CultureInfo.InvariantCulture);
+        result = new DateTime(year, month, day, hour, 0, 0);
+        return true;
+    }
+
     public static DateTime ExtractSortDate(string filePath)
     {
         try
@@ -49,15 +66,9 @@ public static class ManualLogFileParser
             // fall through to filename parsing
         }
 
-        var fileName = Path.GetFileNameWithoutExtension(filePath);
-        var match = FileNamePattern.Match(fileName);
-        if (match.Success)
+        if (TryExtractSortDateFromFileName(filePath, out var fromFileName))
         {
-            var year = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
-            var month = int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
-            var day = int.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture);
-            var hour = int.Parse(match.Groups[4].Value, CultureInfo.InvariantCulture);
-            return new DateTime(year, month, day, hour, 0, 0);
+            return fromFileName;
         }
 
         try

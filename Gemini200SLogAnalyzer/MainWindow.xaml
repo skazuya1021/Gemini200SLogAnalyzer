@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:models="clr-namespace:Gemini200SLogAnalyzer.Models"
         xmlns:scottplot="clr-namespace:ScottPlot.WPF;assembly=ScottPlot.WPF"
-        Title="Gemini200S Log Analyzer v1.2.1"
+        Title="Gemini200S Log Analyzer v1.3.2"
         Height="860"
         Width="1280"
         MinHeight="700"
@@ -297,14 +297,180 @@
                         <Grid.RowDefinitions>
                             <RowDefinition Height="*"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         <Border Grid.Row="0" Background="White" BorderBrush="{StaticResource BorderBrushColor}"
                                 BorderThickness="1" CornerRadius="6" Padding="4">
-                            <scottplot:WpfPlot x:Name="ChartPlot"/>
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <scottplot:WpfPlot x:Name="ChartPlot"
+                                                   Grid.Row="0"
+                                                   MouseMove="ChartPlot_MouseMove"
+                                                   MouseLeave="ChartPlot_MouseLeave"
+                                                   PreviewMouseLeftButtonDown="ChartPlot_PreviewMouseLeftButtonDown"
+                                                   PreviewMouseWheel="ChartPlot_InteractionChanged"
+                                                   MouseUp="ChartPlot_InteractionChanged"/>
+                                <TextBlock x:Name="ChartPlotStatusTextBlock" Grid.Row="1"
+                                           FontSize="10" Foreground="#64748B" Margin="4,2,0,0"/>
+                            </Grid>
                         </Border>
-                        <Button Grid.Row="1" Content="PNGとして保存..." HorizontalAlignment="Right"
+                        <Border Grid.Row="1" Background="#F8FAFC" BorderBrush="{StaticResource BorderBrushColor}"
+                                BorderThickness="1" CornerRadius="6" Padding="8" Margin="0,8,0,0">
+                            <StackPanel>
+                                <CheckBox x:Name="DiffMeasureCheckBox"
+                                          Content="2点間差分測定（グラフをクリックして点1・点2を指定）"
+                                          Checked="DiffMeasureCheckBox_Changed"
+                                          Unchecked="DiffMeasureCheckBox_Changed"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                    <TextBlock Text="点1から" VerticalAlignment="Center"/>
+                                    <TextBox x:Name="DiffOffsetValueTextBox" Width="48" Height="24"
+                                             Text="10" Margin="6,0,4,0" VerticalAlignment="Center"/>
+                                    <ComboBox x:Name="DiffOffsetUnitComboBox" Width="56" Height="24"
+                                              SelectedIndex="1" VerticalAlignment="Center">
+                                        <ComboBoxItem Content="秒"/>
+                                        <ComboBoxItem Content="分"/>
+                                        <ComboBoxItem Content="時間"/>
+                                    </ComboBox>
+                                    <TextBlock Text="後を点2に" VerticalAlignment="Center" Margin="4,0,0,0"/>
+                                    <Button Content="点2自動設定" Padding="8,2" Margin="8,0,0,0"
+                                            Click="ApplyAutoDiffPoint2_Click"/>
+                                </StackPanel>
+                                <CheckBox x:Name="DiffAutoPoint2CheckBox" Margin="0,4,0,0"
+                                          Content="点1指定後に自動で点2を設定"/>
+                                <TextBlock x:Name="ChartCursorInfoTextBlock"
+                                           Text="カーソルをグラフ上に移動すると、最寄りのデータ点の値を表示します。"
+                                           TextWrapping="Wrap" FontFamily="Consolas" FontSize="11"
+                                           Foreground="#334155" Margin="0,6,0,0"/>
+                                <TextBlock x:Name="ChartDiffInfoTextBlock"
+                                           TextWrapping="Wrap" FontFamily="Consolas" FontSize="11"
+                                           Foreground="#B45309" Margin="0,4,0,0"/>
+                            </StackPanel>
+                        </Border>
+                        <StackPanel Grid.Row="2" Margin="0,8,0,0">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,6">
+                                <CheckBox x:Name="PngIncludeCursorCheckBox"
+                                          Content="PNGにカーソル位置データを含める"
+                                          IsChecked="True" Margin="0,0,16,0" VerticalAlignment="Center"/>
+                                <CheckBox x:Name="PngIncludeDiffCheckBox"
+                                          Content="PNGに2点間差分データを含める"
+                                          IsChecked="True" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <Button Content="表示をリセット" Width="120" Height="32" Margin="0,0,8,0"
+                                        Click="ResetChartPlotView_Click"/>
+                                <Button Content="差分をクリア" Width="120" Height="32" Margin="0,0,8,0"
+                                        Click="ClearChartDiff_Click"/>
+                                <Button Content="CSVとして保存..." Width="160" Height="32" Margin="0,0,8,0"
+                                        Click="SaveChartCsv_Click"/>
+                                <Button Content="PNGとして保存..." Width="160" Height="32"
+                                        Click="SaveChartPng_Click"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+            </TabItem>
+
+            <!-- 変動確認 -->
+            <TabItem Header="変動確認">
+                <Grid Margin="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="300"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <Border Grid.Column="0" Background="White" BorderBrush="{StaticResource BorderBrushColor}"
+                            BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,0,8,0">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel>
+                                <TextBlock Text="測定ポイント" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                                <TextBlock x:Name="VariationPointStatusTextBlock"
+                                           Text="グラフタブで点1・点2を指定してください。"
+                                           TextWrapping="Wrap" Foreground="#64748B" Margin="0,0,0,10"/>
+
+                                <TextBlock Text="分析項目" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                                <ComboBox x:Name="VariationSeriesComboBox" Margin="0,0,0,10"/>
+
+                                <TextBlock Text="分析方式" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                                <StackPanel Margin="0,0,0,8">
+                                    <RadioButton x:Name="VariationTimeModeRadioButton" Content="時間間隔"
+                                                 GroupName="VariationMode" IsChecked="True" Margin="0,0,0,4"/>
+                                    <RadioButton x:Name="VariationValueModeRadioButton" Content="値間隔（Y軸）"
+                                                 GroupName="VariationMode"/>
+                                </StackPanel>
+
+                                <CheckBox x:Name="VariationAutoIntervalCheckBox" Content="間隔を自動設定"
+                                          IsChecked="True" Margin="0,0,0,6"/>
+
+                                <StackPanel x:Name="VariationTimeIntervalPanel" Margin="0,0,0,8">
+                                    <TextBlock Text="時間間隔"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                        <TextBox x:Name="VariationTimeIntervalTextBox" Width="48" Height="24"
+                                                 Text="10" Margin="0,0,4,0"/>
+                                        <ComboBox x:Name="VariationTimeUnitComboBox" Width="56" Height="24"
+                                                  SelectedIndex="1">
+                                            <ComboBoxItem Content="秒"/>
+                                            <ComboBoxItem Content="分"/>
+                                            <ComboBoxItem Content="時間"/>
+                                        </ComboBox>
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <StackPanel x:Name="VariationValueIntervalPanel" Margin="0,0,0,8"
+                                            Visibility="Collapsed">
+                                    <TextBlock Text="値間隔（Y軸）"/>
+                                    <TextBox x:Name="VariationValueStepTextBox" Height="24" Margin="0,2,0,0"
+                                             Text="5"/>
+                                </StackPanel>
+
+                                <Button Content="変動分析を実行" Height="32" Margin="0,6,0,6"
+                                        Click="RunVariationAnalysis_Click"/>
+                                <Button Content="グラフタブの点を使用" Height="28"
+                                        Click="RefreshVariationPointStatus_Click"/>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+
+                    <Grid Grid.Column="1">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" MinHeight="180"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*" MinHeight="140"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Border Grid.Row="0" Background="White" BorderBrush="{StaticResource BorderBrushColor}"
+                                BorderThickness="1" CornerRadius="6" Padding="4">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <scottplot:WpfPlot x:Name="VariationPlot"
+                                                   Grid.Row="0"
+                                                   PreviewMouseWheel="VariationPlot_InteractionChanged"
+                                                   MouseUp="VariationPlot_InteractionChanged"/>
+                                <TextBlock x:Name="VariationPlotStatusTextBlock" Grid.Row="1"
+                                           FontSize="10" Foreground="#64748B" Margin="4,2,0,0"/>
+                            </Grid>
+                        </Border>
+                        <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch"
+                                      Background="Transparent" Margin="0,4"/>
+                        <DataGrid Grid.Row="2" x:Name="VariationAnalysisDataGrid"
+                                  AutoGenerateColumns="False"
+                                  IsReadOnly="True"
+                                  CanUserAddRows="False"
+                                  AlternatingRowBackground="#F8FAFC"
+                                  GridLinesVisibility="Horizontal"
+                                  HeadersVisibility="Column"/>
+                        <Button Grid.Row="3" Content="表示をリセット" HorizontalAlignment="Left"
+                                Width="120" Height="28" Margin="0,8,0,0"
+                                Click="ResetVariationPlotView_Click"/>
+                        <Button Grid.Row="4" Content="CSVとして保存..." HorizontalAlignment="Right"
                                 Width="160" Height="32" Margin="0,8,0,0"
-                                Click="SaveChartPng_Click"/>
+                                Click="ExportVariationCsv_Click"/>
                     </Grid>
                 </Grid>
             </TabItem>
