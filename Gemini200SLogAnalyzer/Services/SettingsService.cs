@@ -50,6 +50,32 @@ public sealed class SettingsService
         Save();
     }
 
+    public void UpdateExcelSaveFolder(string folder) =>
+        UpdateFolder(() => _settings.LastExcelSaveFolder, value => _settings.LastExcelSaveFolder = value, folder);
+
+    public void UpdateChartCsvSaveFolder(string folder) =>
+        UpdateFolder(() => _settings.LastChartCsvSaveFolder, value => _settings.LastChartCsvSaveFolder = value, folder);
+
+    public void UpdateChartPngSaveFolder(string folder) =>
+        UpdateFolder(() => _settings.LastChartPngSaveFolder, value => _settings.LastChartPngSaveFolder = value, folder);
+
+    public void UpdateVariationCsvSaveFolder(string folder) =>
+        UpdateFolder(() => _settings.LastVariationCsvSaveFolder, value => _settings.LastVariationCsvSaveFolder = value, folder);
+
+    public void UpdateVariationPngSaveFolder(string folder) =>
+        UpdateFolder(() => _settings.LastVariationPngSaveFolder, value => _settings.LastVariationPngSaveFolder = value, folder);
+
+    private void UpdateFolder(Func<string> getter, Action<string> setter, string folder)
+    {
+        if (string.IsNullOrWhiteSpace(folder) || getter() == folder)
+        {
+            return;
+        }
+
+        setter(folder);
+        Save();
+    }
+
     private void Save()
     {
         var json = System.Text.Json.JsonSerializer.Serialize(_settings, new System.Text.Json.JsonSerializerOptions

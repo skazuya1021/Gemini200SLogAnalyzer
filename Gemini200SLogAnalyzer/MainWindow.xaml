@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:models="clr-namespace:Gemini200SLogAnalyzer.Models"
         xmlns:scottplot="clr-namespace:ScottPlot.WPF;assembly=ScottPlot.WPF"
-        Title="Gemini200S Log Analyzer v1.3.4"
+        Title="Gemini200S Log Analyzer v1.3.5"
         Height="860"
         Width="1280"
         MinHeight="700"
@@ -337,6 +337,8 @@
                                                    MouseMove="ChartPlot_MouseMove"
                                                    MouseLeave="ChartPlot_MouseLeave"
                                                    PreviewMouseLeftButtonDown="ChartPlot_PreviewMouseLeftButtonDown"
+                                                   PreviewMouseMove="ChartPlot_PreviewMouseMove"
+                                                   PreviewMouseLeftButtonUp="ChartPlot_PreviewMouseLeftButtonUp"
                                                    PreviewMouseWheel="ChartPlot_InteractionChanged"
                                                    MouseUp="ChartPlot_InteractionChanged"/>
                                 <TextBlock x:Name="ChartPlotStatusTextBlock" Grid.Row="1"
@@ -346,13 +348,21 @@
                         <Border Grid.Row="1" Background="#F8FAFC" BorderBrush="{StaticResource BorderBrushColor}"
                                 BorderThickness="1" CornerRadius="6" Padding="8" Margin="0,8,0,0">
                             <StackPanel>
+                                <CheckBox x:Name="ChartCrosshairCheckBox"
+                                          Content="カーソル位置を表示（クロスヘア）"
+                                          IsChecked="True"
+                                          Checked="ChartCrosshairCheckBox_Changed"
+                                          Unchecked="ChartCrosshairCheckBox_Changed"/>
                                 <CheckBox x:Name="DiffMeasureCheckBox"
-                                          Content="2点間差分測定（グラフをクリックして点1・点2を指定）"
+                                          Content="2点間差分測定"
+                                          Margin="0,4,0,0"
                                           Checked="DiffMeasureCheckBox_Changed"
                                           Unchecked="DiffMeasureCheckBox_Changed"/>
                                 <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                    <RadioButton x:Name="DiffTargetCursorMoveRadioButton" Content="カーソル移動"
+                                                 GroupName="DiffTarget" IsChecked="True" Margin="0,0,12,0"/>
                                     <RadioButton x:Name="DiffTargetPoint1RadioButton" Content="点1を指定"
-                                                 GroupName="DiffTarget" IsChecked="True" Margin="0,0,16,0"/>
+                                                 GroupName="DiffTarget" Margin="0,0,12,0"/>
                                     <RadioButton x:Name="DiffTargetPoint2RadioButton" Content="点2を指定"
                                                  GroupName="DiffTarget"/>
                                 </StackPanel>
@@ -500,9 +510,13 @@
                         <Button Grid.Row="3" Content="表示をリセット" HorizontalAlignment="Left"
                                 Width="120" Height="28" Margin="0,8,0,0"
                                 Click="ResetVariationPlotView_Click"/>
-                        <Button Grid.Row="4" Content="CSVとして保存..." HorizontalAlignment="Right"
-                                Width="160" Height="32" Margin="0,8,0,0"
-                                Click="ExportVariationCsv_Click"/>
+                        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right"
+                                    Margin="0,8,0,0">
+                            <Button Content="PNGとして保存..." Width="160" Height="32" Margin="0,0,8,0"
+                                    Click="SaveVariationPng_Click"/>
+                            <Button Content="CSVとして保存..." Width="160" Height="32"
+                                    Click="ExportVariationCsv_Click"/>
+                        </StackPanel>
                     </Grid>
                 </Grid>
             </TabItem>

@@ -65,7 +65,10 @@ public partial class MainWindow : Window
     private int _chartPlotLodVisibleCount;
     private int _chartPlotLodTotalInView;
     private bool _chartUpdatePending;
+    private bool _chartMetadataPending;
     private ScrollViewer? _analysisGridScrollViewer;
+    private Point _chartMouseDownPoint;
+    private bool _chartMouseDragDetected;
 
     public MainWindow()
     {
@@ -602,12 +605,23 @@ public partial class MainWindow : Window
             });
         }
 
-        PopulateChartMetadataFilters();
         PopulateScatterAxisOptions();
         PopulateVariationSeriesOptions();
-        UpdateChartPanelVisibility();
+        _chartMetadataPending = true;
         _chartUpdatePending = true;
         MainTabControl.SelectedIndex = 1;
+    }
+
+    private void EnsureChartMetadataLoaded()
+    {
+        if (!_chartMetadataPending)
+        {
+            return;
+        }
+
+        _chartMetadataPending = false;
+        PopulateChartMetadataFilters();
+        UpdateChartPanelVisibility();
     }
 
     private void MainTabControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -617,10 +631,14 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (MainTabControl.SelectedIndex == 2 && _chartUpdatePending)
+        if (MainTabControl.SelectedIndex == 2)
         {
-            _chartUpdatePending = false;
-            UpdateChart();
+            EnsureChartMetadataLoaded();
+            if (_chartUpdatePending)
+            {
+                _chartUpdatePending = false;
+                UpdateChart();
+            }
         }
     }
 
@@ -651,20 +669,53 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (_analysisGridScrollViewer is null)
+        var firstVisible = -1;
+        var lastVisible = -1;
+        var generator = AnalysisDataGrid.ItemContainerGenerator;
+
+        for (var i = 0; i < AnalysisDataGrid.Items.Count; i++)
+        {
+            if (generator.ContainerFromIndex(i) is not DataGridRow row || !IsDataGridRowVisible(row))
+            {
+                continue;
+            }
+
+            if (firstVisible < 0)
+            {
+                firstVisible = i;
+            }
+
+            lastVisible = i;
+        }
+
+        if (firstVisible < 0)
         {
             AnalysisGridStatusTextBlock.Text = $"全 {_analysisRows.Count:N0} 行";
             return;
         }
 
-        var rowHeight = AnalysisDataGrid.RowHeight > 0 ? AnalysisDataGrid.RowHeight : 24.0;
-        var firstVisible = (int)Math.Floor(_analysisGridScrollViewer.VerticalOffset / rowHeight);
-        var visibleCount = (int)Math.Ceiling(_analysisGridScrollViewer.ViewportHeight / rowHeight) + 1;
-        var lastVisible = Math.Min(_analysisRows.Count - 1, firstVisible + visibleCount - 1);
-        firstVisible = Math.Clamp(firstVisible, 0, Math.Max(0, _analysisRows.Count - 1));
-
         AnalysisGridStatusTextBlock.Text =
             $"表示中: {firstVisible + 1:N0} 〜 {lastVisible + 1:N0} / 全 {_analysisRows.Count:N0} 行（スクロールに応じて表示）";
+    }
+
+    private bool IsDataGridRowVisible(DataGridRow row)
+    {
+        if (row.ActualHeight <= 0 || AnalysisDataGrid.ActualHeight <= 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            var origin = row.TransformToAncestor(AnalysisDataGrid).Transform(new Point(0, 0));
+            var rowTop = origin.Y;
+            var rowBottom = rowTop + row.ActualHeight;
+            return rowBottom > 0 && rowTop < AnalysisDataGrid.ActualHeight;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
     }
 
     private static T? FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
@@ -799,7 +850,25 @@ public partial class MainWindow : Window
         }
 
         AnalysisDataGrid.ItemsSource = _analysisRows;
-        UpdateAnalysisGridStatus();
+        Dispatcher.BeginInvoke(UpdateAnalysisGridStatus, DispatcherPriority.Loaded);
+    }
+
+    private static bool TryGetSavePath(SaveFileDialog dialog, Action<string> updateFolder, out string filePath)
+    {
+        if (dialog.ShowDialog() != true)
+        {
+            filePath = string.Empty;
+            return false;
+        }
+
+        filePath = dialog.FileName;
+        var folder = Path.GetDirectoryName(filePath);
+        if (!string.IsNullOrWhiteSpace(folder))
+        {
+            updateFolder(folder);
+        }
+
+        return true;
     }
 
     private void ExportExcel_Click(object sender, RoutedEventArgs e)
@@ -816,18 +885,18 @@ public partial class MainWindow : Window
             Title = "Excel形式で保存",
             Filter = "Excelファイル (*.xlsx)|*.xlsx",
             FileName = "AnalysisResult.xlsx",
-            InitialDirectory = _settingsService.GetInitialFolder(_settingsService.Current.LastOutputFolder),
+            InitialDirectory = _settingsService.GetInitialFolder(_settingsService.Current.LastExcelSaveFolder),
             DefaultExt = ".xlsx"
         };
 
-        if (dialog.ShowDialog() != true)
+        if (!TryGetSavePath(dialog, _settingsService.UpdateExcelSaveFolder, out var filePath))
         {
             return;
         }
 
         try
         {
-            ExcelExportService.ExportAnalysis(_analysisRows, _displayColumnNames, dialog.FileName);
+            ExcelExportService.ExportAnalysis(_analysisRows, _displayColumnNames, filePath);
             MessageBox.Show("Excelファイルを保存しました。", "完了", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
@@ -1242,18 +1311,18 @@ public partial class MainWindow : Window
             Title = "グラフ表示範囲をCSVとして保存",
             Filter = "CSVファイル (*.csv)|*.csv",
             FileName = "ChartData.csv",
-            InitialDirectory = _settingsService.GetInitialFolder(_settingsService.Current.LastOutputFolder),
+            InitialDirectory = _settingsService.GetInitialFolder(_settingsService.Current.LastChartCsvSaveFolder),
             DefaultExt = ".csv"
         };
 
-        if (dialog.ShowDialog() != true)
+        if (!TryGetSavePath(dialog, _settingsService.UpdateChartCsvSaveFolder, out var filePath))
         {
             return;
         }
 
         try
         {
-            CsvExportService.ExportAnalysis(exportRows, columnNames, dialog.FileName);
+            CsvExportService.ExportAnalysis(exportRows, columnNames, filePath);
             MessageBox.Show(
                 $"CSVファイルを保存しました。\n行数: {exportRows.Count:N0}\n項目数: {columnNames.Count}",
                 "完了",
@@ -1794,6 +1863,12 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (ChartCrosshairCheckBox.IsChecked != true)
+        {
+            HideChartCrosshair();
+            return;
+        }
+
         var mouseCoords = GetChartMouseCoordinates(e);
         var rowIndex = FindNearestRowIndex(mouseCoords.X);
         if (rowIndex < 0)
@@ -1831,7 +1906,32 @@ public partial class MainWindow : Window
 
     private void ChartPlot_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (!_isUiReady || DiffMeasureCheckBox.IsChecked != true || _chartCursorContext is null)
+        _chartMouseDownPoint = e.GetPosition(ChartPlot);
+        _chartMouseDragDetected = false;
+    }
+
+    private void ChartPlot_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed)
+        {
+            return;
+        }
+
+        var position = e.GetPosition(ChartPlot);
+        if (Math.Abs(position.X - _chartMouseDownPoint.X) > 4 ||
+            Math.Abs(position.Y - _chartMouseDownPoint.Y) > 4)
+        {
+            _chartMouseDragDetected = true;
+        }
+    }
+
+    private void ChartPlot_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (!_isUiReady ||
+            DiffMeasureCheckBox.IsChecked != true ||
+            _chartCursorContext is null ||
+            DiffTargetCursorMoveRadioButton.IsChecked == true ||
+            _chartMouseDragDetected)
         {
             return;
         }
@@ -1868,6 +1968,22 @@ public partial class MainWindow : Window
         UpdateChartDiffInfoText();
         RefreshVariationPointStatus();
         ChartPlot.Refresh();
+    }
+
+    private void ChartCrosshairCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!_isUiReady)
+        {
+            return;
+        }
+
+        if (ChartCrosshairCheckBox.IsChecked != true)
+        {
+            HideChartCrosshair();
+            _lastCursorRowIndex = -1;
+            ResetChartCursorInfoText();
+            ChartPlot.Refresh();
+        }
     }
 
     private void ApplyAutoDiffPoint2_Click(object sender, RoutedEventArgs e)
@@ -1956,6 +2072,10 @@ public partial class MainWindow : Window
         {
             ClearChartDiffPoints();
             ChartPlot.Refresh();
+        }
+        else
+        {
+            DiffTargetCursorMoveRadioButton.IsChecked = true;
         }
     }
 
@@ -2346,18 +2466,18 @@ public partial class MainWindow : Window
             Title = "変動分析結果をCSVとして保存",
             Filter = "CSVファイル (*.csv)|*.csv",
             FileName = "VariationAnalysis.csv",
-            InitialDirectory = _settingsService.GetInitialFolder(_settingsService.Current.LastOutputFolder),
+            InitialDirectory = _settingsService.GetInitialFolder(_settingsService.Current.LastVariationCsvSaveFolder),
             DefaultExt = ".csv"
         };
 
-        if (dialog.ShowDialog() != true)
+        if (!TryGetSavePath(dialog, _settingsService.UpdateVariationCsvSaveFolder, out var filePath))
         {
             return;
         }
 
         try
         {
-            CsvExportService.ExportVariationAnalysis(_variationRows, _variationSeriesName, dialog.FileName);
+            CsvExportService.ExportVariationAnalysis(_variationRows, _variationSeriesName, filePath);
             MessageBox.Show("CSVファイルを保存しました。", "完了", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
@@ -2365,6 +2485,84 @@ public partial class MainWindow : Window
             MessageBox.Show($"CSV保存中にエラーが発生しました:\n{ex.Message}", "エラー",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    private void SaveVariationPng_Click(object sender, RoutedEventArgs e)
+    {
+        if (_variationRows.Count == 0)
+        {
+            MessageBox.Show("先に変動分析を実行してください。", "確認",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new SaveFileDialog
+        {
+            Title = "変動分析結果をPNGとして保存",
+            Filter = "PNG画像 (*.png)|*.png",
+            FileName = "VariationAnalysis.png",
+            InitialDirectory = _settingsService.GetInitialFolder(_settingsService.Current.LastVariationPngSaveFolder),
+            DefaultExt = ".png"
+        };
+
+        if (!TryGetSavePath(dialog, _settingsService.UpdateVariationPngSaveFolder, out var filePath))
+        {
+            return;
+        }
+
+        try
+        {
+            var annotationText = BuildVariationPngAnnotationText();
+            ChartPngExportService.Save(VariationPlot.Plot, filePath, annotationText, VariationPlot);
+            MessageBox.Show("PNGファイルを保存しました。（グラフ＋変動分析結果）", "完了",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"PNG保存中にエラーが発生しました:\n{ex.Message}", "エラー",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private string BuildVariationPngAnnotationText()
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("【変動分析結果】");
+        builder.Append("分析項目: ");
+        builder.AppendLine(_variationSeriesName);
+        builder.AppendLine("No\tDateTime\tElapsed\tValue\tΔ前回\tΔ開始\t前回間隔");
+
+        foreach (var row in _variationRows)
+        {
+            builder.Append(row.Sequence);
+            builder.Append('\t');
+            builder.Append(row.DateTime.ToString("yyyy/MM/dd HH:mm:ss", CultureInfo.InvariantCulture));
+            builder.Append('\t');
+            builder.Append(FormatElapsed(row.ElapsedFromStart));
+            builder.Append('\t');
+            builder.Append(row.Value.ToString("G6", CultureInfo.InvariantCulture));
+            builder.Append('\t');
+            builder.Append(row.DeltaFromPrevious?.ToString("G6", CultureInfo.InvariantCulture) ?? string.Empty);
+            builder.Append('\t');
+            builder.Append(row.DeltaFromStart?.ToString("G6", CultureInfo.InvariantCulture) ?? string.Empty);
+            builder.Append('\t');
+            builder.Append(row.IntervalFromPrevious.HasValue
+                ? FormatElapsed(row.IntervalFromPrevious.Value)
+                : string.Empty);
+            builder.AppendLine();
+        }
+
+        return builder.ToString().TrimEnd();
+    }
+
+    private static string FormatElapsed(TimeSpan elapsed)
+    {
+        if (elapsed.TotalHours >= 1)
+        {
+            return $"{(int)elapsed.TotalHours:D2}:{elapsed.Minutes:D2}:{elapsed.Seconds:D2}";
+        }
+
+        return $"{elapsed.Minutes:D2}:{elapsed.Seconds:D2}";
     }
 
     private Coordinates GetChartMouseCoordinates(MouseEventArgs e)
@@ -2641,11 +2839,11 @@ public partial class MainWindow : Window
             Title = "グラフをPNGとして保存",
             Filter = "PNG画像 (*.png)|*.png",
             FileName = "Chart.png",
-            InitialDirectory = _settingsService.GetInitialFolder(_settingsService.Current.LastOutputFolder),
+            InitialDirectory = _settingsService.GetInitialFolder(_settingsService.Current.LastChartPngSaveFolder),
             DefaultExt = ".png"
         };
 
-        if (dialog.ShowDialog() != true)
+        if (!TryGetSavePath(dialog, _settingsService.UpdateChartPngSaveFolder, out var filePath))
         {
             return;
         }
@@ -2653,7 +2851,7 @@ public partial class MainWindow : Window
         try
         {
             var annotationText = BuildPngAnnotationText(includeCursor, includeDiff);
-            ChartPngExportService.Save(ChartPlot.Plot, dialog.FileName, annotationText, ChartPlot);
+            ChartPngExportService.Save(ChartPlot.Plot, filePath, annotationText, ChartPlot);
 
             var message = annotationText is null
                 ? "PNGファイルを保存しました。"
